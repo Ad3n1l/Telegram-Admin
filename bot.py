@@ -32,15 +32,14 @@ async def is_admin(update: Update):
 
 # --- Bot Features ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🛡️ **Moderation Bot Active**\nGroup is now protected! Admins can use /warn (by reply) and /reset.")
+    await update.message.reply_text("🛡️ **Moderation Bot Active**\nI'm watching for links and slurs. Admins can use /warn (by reply) and /reset.")
 
 async def welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for new_user in update.message.new_chat_members:
         await update.message.reply_text(f"Welcome {new_user.first_name}! No links or swearing allowed. 😊")
 
-# NEW: Manual Warn Command
+# Manual Warn Command
 async def warn_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Allows an admin to manually warn a user by replying to their message."""
     if not await is_admin(update):
         return
 
@@ -52,17 +51,14 @@ async def warn_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = target_user.id
     name = target_user.first_name
     
-    # Don't let admins warn other admins
     target_member = await update.effective_chat.get_member(user_id)
     if target_member.status in [constants.ChatMemberStatus.ADMINISTRATOR, constants.ChatMemberStatus.OWNER]:
         await update.message.reply_text("❌ I cannot warn another admin.")
         return
 
-    # Process warning
     user_warnings[user_id] = user_warnings.get(user_id, 0) + 1
     count = user_warnings[user_id]
     
-    # Delete the message being warned
     await update.message.reply_to_message.delete()
     
     if count >= 3:
@@ -81,15 +77,19 @@ async def moderate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     name = update.effective_user.first_name
     
-    # 1. Aggressive Link Detection
-    url_pattern = r'(https?://[^\s]+)|(www\.[^\s]+)|(t\.me/[^\s]+)|([a-zA-Z0-9-]+\.(com|net|org|me|io|info|tk|ml|ga|co|xyz|online|biz|uk|us))'
+    # 1. THE NUCLEAR LINK FILTER (Captures almost all domains)
+    url_pattern = r'(https?://\S+)|(www\.\S+)|(t\.me/\S+)|([\w-]+\.(com|net|org|me|io|info|tk|ml|ga|co|xyz|online|biz|uk|us|ca|gov|edu|shop|link|top|click))'
     has_raw_link = re.search(url_pattern, content_lower)
     
+    # 2. Check Telegram Entities (Handles blue links and hidden [Hyperlinks])
     has_entity_link = False
     if update.message.entities:
-        has_entity_link = any(e.type in [constants.MessageEntity.URL, constants.MessageEntity.TEXT_LINK] for e in update.message.entities)
+        for entity in update.message.entities:
+            if entity.type in [constants.MessageEntity.URL, constants.MessageEntity.TEXT_LINK]:
+                has_entity_link = True
+                break
     
-    # 2. Profanity Detection (Case-insensitive)
+    # 3. Profanity Detection (Case-insensitive)
     has_profanity = any(word in content_lower for word in PROFANITY_LIBRARY)
 
     if has_raw_link or has_entity_link or has_profanity:
@@ -122,9 +122,10 @@ if __name__ == '__main__':
     
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("reset", reset_warnings))
-    app.add_handler(CommandHandler("warn", warn_user)) # Added manual warn command
+    app.add_handler(CommandHandler("warn", warn_user))
     
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome))
+    # Note: Use filters.TEXT | filters.CAPTION to catch links in image descriptions
     app.add_handler(MessageHandler((filters.TEXT | filters.CAPTION) & (~filters.COMMAND), moderate))
     
     PORT = int(os.getenv("PORT", 8080))
