@@ -67,7 +67,7 @@ class UserWarnings:
 class TelegramBot:
     def __init__(self, token: str, webhook_url: str = None, use_webhook: bool = True):
         self.token = token
-        self.base_url = f"https://api.telegram.org/bot{8004304094:AAHLjp64dwwSbWfZ3YaVZqEwjtF7N9Laxgg}"
+        self.base_url = f"https://api.telegram.org/bot{self.token}"
         self.webhook_url = webhook_url
         self.use_webhook = use_webhook
         self.last_update_id = 0
